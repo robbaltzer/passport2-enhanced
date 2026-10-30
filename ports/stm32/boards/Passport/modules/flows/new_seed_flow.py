@@ -19,6 +19,7 @@ class NewSeedFlow(Flow):
         self.full_backup = full_backup
         self.seed_length = None
         self.skip_seed_prompt = False
+        self.dice_rolls = None
 
     async def check_for_seed(self):
         # Ensure we don't overwrite an existing seed
@@ -52,14 +53,65 @@ class NewSeedFlow(Flow):
                                         icon=lv.LARGE_ICON_INFO,
                                         left_micron=microns.Back).show()
         if result:
-            self.goto(self.generate_seed)
+            self.goto(self.enter_dice)
         else:
             self.back()
+
+    async def enter_dice(self):
+        from pages import DiceEntropyPage
+
+        rolls = await DiceEntropyPage(rolls=self.dice_rolls or '',
+                                      card_header={'title': 'Dice Entropy'}).show()
+        if rolls is None:
+            # User backed out of dice entry
+            self.dice_rolls = None
+            self.back()
+            return
+
+        self.dice_rolls = rolls
+        self.goto(self.confirm_dice)
+
+    async def confirm_dice(self):
+        import trezorcrypto
+        from pages import LongQuestionPage
+        from utils import b2a_hex
+        from public_constants import MIN_DICE_ROLLS, DICE_BITS_PER_ROLL_MILLI
+
+        n = len(self.dice_rolls)
+        bits = (n * DICE_BITS_PER_ROLL_MILLI) // 1000
+        rolls_hash = b2a_hex(trezorcrypto.sha256(self.dice_rolls.encode()).digest()).decode()
+
+        if n == 0:
+            text = ('No dice rolls were entered.\n\nThe seed will be generated from '
+                    'hardware entropy only. Continue?')
+        else:
+            text = ('{} roll{} entered (~{} bits).\n\n'
+                    'SHA-256 of rolls:\n{}\n{}\n\n'
+                    'Continue?').format(n, '' if n == 1 else 's', bits,
+                                        rolls_hash[:32], rolls_hash[32:])
+            if n < MIN_DICE_ROLLS:
+                text = ('WARNING: Only {} roll{} (~{} bits). {} rolls are recommended for '
+                        '~128 bits of dice entropy.\n\n'
+                        'SHA-256 of rolls:\n{}\n{}\n\n'
+                        'Continue anyway?').format(n, '' if n == 1 else 's', bits, MIN_DICE_ROLLS,
+                                                   rolls_hash[:32], rolls_hash[32:])
+
+        result = await LongQuestionPage(text=text,
+                                        card_header={'title': 'Dice Entropy'},
+                                        left_micron=microns.Back,
+                                        right_micron=microns.Checkmark).show()
+        if result:
+            self.goto(self.generate_seed)
+        else:
+            # Go back to dice entry with rolls preserved so they can be edited
+            self.goto(self.enter_dice)
 
     async def generate_seed(self):
         (seed, error) = await spinner_task('Generating Seed',
                                            new_seed_task,
-                                           args=[self.seed_length])
+                                           args=[self.seed_length, self.dice_rolls])
+        # Don't keep the rolls around any longer than necessary
+        self.dice_rolls = None
         if error is None:
             self.seed = seed
             self.goto(self.save_seed)
