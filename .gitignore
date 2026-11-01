@@ -100,3 +100,4 @@ simulator/snapshots/
 *.pem
 .vscode
 /.local-code-artifacts/
+dist/
