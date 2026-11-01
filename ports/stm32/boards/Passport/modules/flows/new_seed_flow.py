@@ -100,7 +100,9 @@ class NewSeedFlow(Flow):
             # rolls were received exactly as typed; it does not reveal the hardware
             # entropy and so cannot be used to recompute the final seed.
             note = ('Hardware entropy is always included; dice are added to it. '
-                    'Estimates assume fair, independent dice.')
+                    'Estimates assume fair, independent dice. Rolls beyond the target '
+                    'add no further strength to a {}-word seed. Your seed words remain '
+                    'the only backup.').format(self.seed_length)
             text = ('{} roll{} entered (~{} bits).\n\n'
                     'SHA-256 of rolls as typed:\n{}\n{}\n\n'
                     '{}\n\nContinue?').format(n, '' if n == 1 else 's', bits,
@@ -120,15 +122,19 @@ class NewSeedFlow(Flow):
         if result:
             self.goto(self.generate_seed)
         else:
-            # Go back to dice entry with rolls preserved so they can be edited
-            self.goto(self.enter_dice)
+            # Pop back to dice entry (rolls are preserved in self.dice_rolls). Using
+            # goto() here would push confirm_dice onto the history and trap the user
+            # in a confirm <-> entry loop.
+            self.back()
 
     async def generate_seed(self):
         (seed, error) = await spinner_task('Generating Seed',
                                            new_seed_task,
                                            args=[self.seed_length, self.dice_rolls])
         if error is None:
-            # Don't keep the rolls around any longer than necessary
+            # Drop our reference to the rolls. (This does not scrub memory; MicroPython
+            # offers no reliable way to zero a str, and the same applies to the
+            # hardware entropy buffer in new_seed_task.)
             self.dice_rolls = None
             self.seed = seed
             self.goto(self.save_seed)
