@@ -23,6 +23,7 @@ class FakeNoise:
     def random_bytes(self, buf, src):
         for i in range(len(buf)):
             buf[i] = HW[i]
+        return True
 HW = bytes(range(32))
 common.noise = FakeNoise()
 
@@ -83,6 +84,7 @@ class FakeNoise2:
     def random_bytes(self, buf, src):
         for i in range(len(buf)):
             buf[i] = HW2[i]
+        return True
 common.noise = FakeNoise2()
 b = gen(24, '123456')
 return_value.write((a + ' ' + b).encode())
@@ -256,3 +258,25 @@ uasyncio.run(run())
     assert d1 == depth0 + 2          # confirm_generate, enter_dice pushed
     assert d2 == depth0 + 1          # Back popped, did not push
     assert d3 == depth0              # second Back pops to confirm_generate
+
+
+def test_hardware_entropy_failure_is_an_error(headless):
+    """If random_bytes() reports failure, no seed is produced (with or without dice)."""
+    out = headless.exec(SETUP + r'''
+class FailingNoise:
+    ALL = 7
+    def random_bytes(self, buf, src):
+        return False
+common.noise = FailingNoise()
+res = {}
+async def done(seed, err):
+    res['seed'] = seed; res['err'] = err
+uasyncio.run(new_seed_task(done, 24))
+a = (res['seed'], res['err'])
+uasyncio.run(new_seed_task(done, 12, '123456'))
+b = (res['seed'], res['err'])
+return_value.write(repr((a, b)).encode())
+''')
+    a, b = eval(out)
+    assert a == (None, 'Unable to gather hardware entropy.')
+    assert b == (None, 'Unable to gather hardware entropy.')

@@ -15,9 +15,9 @@ class MainFlow(Flow):
         # changes seed generation and is installed under a developer key; make sure
         # nobody treats it as a production wallet.
         #
-        # Deliberately NOT shown before LoginFlow: the stock pre-login sequence is
-        # left untouched, and a failure here must never be able to block boot, so
-        # any exception is swallowed.
+        # Deliberately NOT shown before LoginFlow so the stock pre-login sequence
+        # is left untouched. The try/except only covers this page itself raising;
+        # it is logged so a silently missing warning can be diagnosed.
         try:
             from pages import ErrorPage
             from public_constants import FORK_NAME
@@ -26,8 +26,8 @@ class MainFlow(Flow):
             await ErrorPage(text='{}\n\nUNOFFICIAL FIRMWARE\nTest use only.\n\n'
                                  'Do NOT store real funds on this device.'.format(FORK_NAME),
                             right_micron=microns.Checkmark).show()
-        except Exception:
-            pass
+        except Exception as e:
+            print('show_fork_warning() failed: {}'.format(e))
 
     async def start(self):
         import common

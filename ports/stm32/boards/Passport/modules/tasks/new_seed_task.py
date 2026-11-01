@@ -9,7 +9,12 @@ import trezorcrypto
 
 async def new_seed_task(on_done, seed_length, extra_entropy=None):
     seed = bytearray(32)
-    common.noise.random_bytes(seed, common.noise.ALL)
+    # On this firmware base random_bytes() returns False if any hardware source
+    # fails (later upstream versions invoke the fatal handler instead). Never
+    # build a seed from a partial set of sources.
+    if not common.noise.random_bytes(seed, common.noise.ALL):
+        await on_done(None, 'Unable to gather hardware entropy.')
+        return
 
     # Hash to mitigate any potential bias in RNG sources.
     #

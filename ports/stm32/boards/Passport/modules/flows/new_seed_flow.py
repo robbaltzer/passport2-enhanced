@@ -47,7 +47,8 @@ class NewSeedFlow(Flow):
 
     async def confirm_generate(self):
         # result = await QuestionPage(text='Generate a new seed phrase now?').show()
-        text = 'Passport will create and back up a new {}-word seed phrase.'.format(self.seed_length)
+        text = ('Passport will create and back up a new {}-word seed phrase.\n\n'
+                'UNOFFICIAL FIRMWARE: test use only.').format(self.seed_length)
         result = await YesNoChooserPage(text=text,
                                         yes_text='Continue',
                                         no_text='Back',
