@@ -20,6 +20,7 @@ class NewSeedFlow(Flow):
         self.full_backup = full_backup
         self.seed_length = None
         self.skip_seed_prompt = False
+        self.dice_rolls = None
 
     async def check_for_seed(self):
         # Ensure we don't overwrite an existing seed
@@ -46,22 +47,97 @@ class NewSeedFlow(Flow):
 
     async def confirm_generate(self):
         # result = await QuestionPage(text='Generate a new seed phrase now?').show()
-        text = 'Passport will create and back up a new {}-word seed phrase.'.format(self.seed_length)
+        text = ('Passport will create and back up a new {}-word seed phrase.\n\n'
+                'UNOFFICIAL FIRMWARE: test use only.').format(self.seed_length)
         result = await YesNoChooserPage(text=text,
                                         yes_text='Continue',
                                         no_text='Back',
                                         icon=lv.LARGE_ICON_INFO,
                                         left_micron=microns.Back).show()
         if result:
+            self.goto(self.enter_dice)
+        else:
+            self.back()
+
+    async def enter_dice(self):
+        from pages import DiceEntropyPage
+
+        page = DiceEntropyPage(rolls=self.dice_rolls or '',
+                               target_rolls=self.target_rolls(),
+                               card_header={'title': 'Dice Entropy'})
+        rolls = await page.show()
+        if rolls is None:
+            # User backed out of dice entry: keep whatever was typed so far so it
+            # is restored if the user comes forward again.
+            self.dice_rolls = page.rolls or None
+            self.back()
+            return
+
+        self.dice_rolls = rolls
+        self.goto(self.confirm_dice)
+
+    def target_rolls(self):
+        # Enough fair d6 rolls (~2.585 bits each) to match the seed's own entropy:
+        # 12 words = 128 bits -> 50 rolls, 24 words = 256 bits -> 100 rolls.
+        from public_constants import DICE_BITS_PER_ROLL_MILLI
+        seed_bits = (self.seed_length // 3) * 32
+        return (seed_bits * 1000 + DICE_BITS_PER_ROLL_MILLI - 1) // DICE_BITS_PER_ROLL_MILLI
+
+    async def confirm_dice(self):
+        import trezorcrypto
+        from pages import LongQuestionPage
+        from utils import b2a_hex
+        from public_constants import DICE_BITS_PER_ROLL_MILLI
+
+        n = len(self.dice_rolls)
+        bits = (n * DICE_BITS_PER_ROLL_MILLI) // 1000
+        target = self.target_rolls()
+        rolls_hash = b2a_hex(trezorcrypto.sha256(self.dice_rolls.encode()).digest()).decode()
+
+        if n == 0:
+            text = ('No dice rolls were entered.\n\nThe seed will be generated from '
+                    'hardware entropy only. Continue?')
+        else:
+            # NOTE: this hash covers the dice rolls only. It lets the user confirm the
+            # rolls were received exactly as typed; it does not reveal the hardware
+            # entropy and so cannot be used to recompute the final seed.
+            note = ('Hardware entropy is always included; dice are added to it. '
+                    'Estimates assume fair, independent dice. Rolls beyond the target '
+                    'add no further strength to a {}-word seed. Your seed words remain '
+                    'the only backup.').format(self.seed_length)
+            text = ('{} roll{} entered (~{} bits).\n\n'
+                    'SHA-256 of rolls as typed:\n{}\n{}\n\n'
+                    '{}\n\nContinue?').format(n, '' if n == 1 else 's', bits,
+                                              rolls_hash[:32], rolls_hash[32:], note)
+            if n < target:
+                text = ('WARNING: Only {} roll{} (~{} bits). {} rolls are recommended to match '
+                        'a {}-word seed.\n\n'
+                        'SHA-256 of rolls as typed:\n{}\n{}\n\n'
+                        '{}\n\nContinue anyway?').format(n, '' if n == 1 else 's', bits, target,
+                                                         self.seed_length,
+                                                         rolls_hash[:32], rolls_hash[32:], note)
+
+        result = await LongQuestionPage(text=text,
+                                        card_header={'title': 'Dice Entropy'},
+                                        left_micron=microns.Back,
+                                        right_micron=microns.Checkmark).show()
+        if result:
             self.goto(self.generate_seed)
         else:
+            # Pop back to dice entry (rolls are preserved in self.dice_rolls). Using
+            # goto() here would push confirm_dice onto the history and trap the user
+            # in a confirm <-> entry loop.
             self.back()
 
     async def generate_seed(self):
         (seed, error) = await spinner_task('Generating Seed',
                                            new_seed_task,
-                                           args=[self.seed_length])
+                                           args=[self.seed_length, self.dice_rolls])
         if error is None:
+            # Drop our reference to the rolls. (This does not scrub memory; MicroPython
+            # offers no reliable way to zero a str, and the same applies to the
+            # hardware entropy buffer in new_seed_task.)
+            self.dice_rolls = None
             self.seed = seed
             self.goto(self.save_seed)
         else:

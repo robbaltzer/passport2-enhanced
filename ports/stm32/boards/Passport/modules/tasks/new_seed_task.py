@@ -5,15 +5,29 @@
 
 import common
 import trezorcrypto
-from utils import b2a_hex
 
 
-async def new_seed_task(on_done, seed_length):
+async def new_seed_task(on_done, seed_length, extra_entropy=None):
     seed = bytearray(32)
-    common.noise.random_bytes(seed, common.noise.ALL)
+    # On this firmware base random_bytes() returns False if any hardware source
+    # fails (later upstream versions invoke the fatal handler instead). Never
+    # build a seed from a partial set of sources.
+    if not common.noise.random_bytes(seed, common.noise.ALL):
+        await on_done(None, 'Unable to gather hardware entropy.')
+        return
 
-    # Hash to mitigate any potential bias in RNG sources
-    seed = trezorcrypto.sha256(seed).digest()
+    # Hash to mitigate any potential bias in RNG sources.
+    #
+    # If the user supplied additional entropy (e.g. dice rolls), it is appended to the
+    # hardware entropy before hashing:  seed = SHA256(hw_entropy || extra_entropy)
+    # The hardware entropy is always included, so a weak die cannot weaken the seed
+    # below what the hardware alone would produce; conversely, a weak hardware RNG
+    # can be compensated for to the extent the dice are fair and independent.
+    # extra_entropy is a str of ASCII dice rolls ('1'-'6'), or None.
+    h = trezorcrypto.sha256(seed)
+    if extra_entropy:
+        h.update(extra_entropy.encode())
+    seed = h.digest()
 
     # Math to convert number of words to number of bytes
     seed = seed[0:((seed_length // 3) * 4)]

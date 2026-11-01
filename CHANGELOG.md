@@ -5,6 +5,9 @@ SPDX-License-Identifier: GPL-3.0-or-later
 -->
 
 ## Head
+- Unofficial fork: not reviewed, signed, or supported by Foundation Devices; no warranty (GPLv3 §15-16)
+- Added a dice-roll entropy step (keys 1-6) to New Seed; rolls are mixed with
+  hardware entropy as SHA256(hw_entropy || rolls) before BIP39 word generation
 - Improved self-send transaction information formatting (PASS1-638)
 - Added the key manager extension, compatible with BIP85 and Nostr (PASS1-24)
 

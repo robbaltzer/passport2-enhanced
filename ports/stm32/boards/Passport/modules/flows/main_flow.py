@@ -10,6 +10,25 @@ class MainFlow(Flow):
     def __init__(self):
         super().__init__(initial_state=self.start, name='MainFlow')
 
+    async def show_fork_warning(self):
+        # Shown on every boot, after login. This firmware is an unofficial fork that
+        # changes seed generation and is installed under a developer key; make sure
+        # nobody treats it as a production wallet.
+        #
+        # Deliberately NOT shown before LoginFlow so the stock pre-login sequence
+        # is left untouched. The try/except only covers this page itself raising;
+        # it is logged so a silently missing warning can be diagnosed.
+        try:
+            from pages import ErrorPage
+            from public_constants import FORK_NAME
+            import microns
+
+            await ErrorPage(text='{}\n\nUNOFFICIAL FIRMWARE\nTest use only.\n\n'
+                                 'Do NOT store real funds on this device.'.format(FORK_NAME),
+                            right_micron=microns.Checkmark).show()
+        except Exception as e:
+            print('show_fork_warning() failed: {}'.format(e))
+
     async def start(self):
         import common
         from utils import start_task, is_logged_in, has_seed, xfp2str, get_accounts
@@ -20,6 +39,8 @@ class MainFlow(Flow):
 
         if not is_logged_in():
             await LoginFlow().run()
+
+        await self.show_fork_warning()
 
         if not has_seed():
             await InitialSeedSetupFlow(allow_backtrack=False).run()
