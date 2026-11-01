@@ -30,7 +30,8 @@ class HeadlessRuntime:
 
         mpy = os.path.join(simulator_dir, '..', 'ports', 'unix', 'passport-mpy')
         if not os.path.exists(mpy):
-            pytest.skip('simulator not built (run `just simulator/build color`)')
+            pytest.skip('SKIPPED: simulator not built at %s - run `just simulator/build color` '
+                        '(these tests have NOT run)' % mpy)
 
         try:
             os.unlink(UNIX_SOCKET_PATH)

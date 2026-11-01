@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# SPDX-FileCopyrightText: © 2026 Rob Baltzer
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
 # build-passport.sh - Build and developer-sign Passport firmware on macOS.
 #
 # Usage:
