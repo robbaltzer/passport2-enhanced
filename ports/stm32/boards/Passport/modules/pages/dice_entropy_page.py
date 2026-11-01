@@ -20,7 +20,8 @@ from public_constants import DICE_BITS_PER_ROLL_MILLI as BITS_PER_ROLL_MILLI
 # Hard cap so the roll string can't grow without bound on-device
 MAX_DICE_ROLLS = 256
 
-# Most recent rolls shown on screen (older ones scroll off the left)
+# Most recent rolls shown on screen (older ones scroll off the left). The start is
+# rounded down to a multiple of 5 to keep groups aligned, so up to 84 may be shown.
 VISIBLE_ROLLS = 80
 
 

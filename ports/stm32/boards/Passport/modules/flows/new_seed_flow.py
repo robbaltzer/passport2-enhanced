@@ -77,7 +77,7 @@ class NewSeedFlow(Flow):
 
     def target_rolls(self):
         # Enough fair d6 rolls (~2.585 bits each) to match the seed's own entropy:
-        # 12 words = 128 bits -> 50 rolls, 24 words = 256 bits -> 99 rolls.
+        # 12 words = 128 bits -> 50 rolls, 24 words = 256 bits -> 100 rolls.
         from public_constants import DICE_BITS_PER_ROLL_MILLI
         seed_bits = (self.seed_length // 3) * 32
         return (seed_bits * 1000 + DICE_BITS_PER_ROLL_MILLI - 1) // DICE_BITS_PER_ROLL_MILLI
@@ -126,9 +126,9 @@ class NewSeedFlow(Flow):
         (seed, error) = await spinner_task('Generating Seed',
                                            new_seed_task,
                                            args=[self.seed_length, self.dice_rolls])
-        # Don't keep the rolls around any longer than necessary
-        self.dice_rolls = None
         if error is None:
+            # Don't keep the rolls around any longer than necessary
+            self.dice_rolls = None
             self.seed = seed
             self.goto(self.save_seed)
         else:
