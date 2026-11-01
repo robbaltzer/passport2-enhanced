@@ -87,7 +87,15 @@ COMMIT="$(git rev-parse --short HEAD)"
 # and cosign does not check the length before strcpy, so enforce <= 7 chars here.
 [[ -n "$VERSION" ]] || VERSION="$(tr -d '[:space:]' < version.txt)"
 [[ "$VERSION" =~ ^[0-9]\.[0-9]{1,2}\.[0-9]{1,2}(b[0-9A-F])?$ ]] || die "version '$VERSION' must be X.Y.Z or X.Y.ZbN (N = one uppercase hex digit)"
-[[ "$VERSION" == *b* ]] || VERSION="${VERSION}b1"
+if [[ "$VERSION" != *b* ]]; then
+    if [[ ${#VERSION} -le 5 ]]; then
+        VERSION="${VERSION}b1"
+    else
+        echo "  note: '$VERSION' leaves no room for a 'b1' marker in the 7-char header field;"
+        echo "        the splash will match the official version. The post-login warning page"
+        echo "        and Settings > Firmware (developer-signed) still identify this build."
+    fi
+fi
 [[ ${#VERSION} -le 7 ]] || die "version '$VERSION' is ${#VERSION} chars; the firmware header holds at most 7"
 
 echo "  branch:  $BRANCH @ $COMMIT"
