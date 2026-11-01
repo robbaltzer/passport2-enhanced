@@ -184,3 +184,75 @@ f.seed_length = 24; b = f.target_rolls()
 return_value.write(repr((a, b, f.dice_rolls)).encode())
 ''')
     assert eval(out) == (50, 100, None)
+
+
+def test_flow_back_from_confirm_does_not_trap(headless):
+    """Regression for the confirm <-> entry Back loop (PR #5).
+
+    Drives NewSeedFlow's enter_dice/confirm_dice states with the pages stubbed,
+    and checks the real Flow history stack: Back from confirm must pop to entry
+    (not push), so a second Back leaves the dice screens entirely.
+    """
+    out = headless.exec(r'''
+import lvgl as lv
+lv.init()
+import uasyncio
+import pages, flows.new_seed_flow as nsf
+from flows.new_seed_flow import NewSeedFlow
+
+# Stub the two pages: DiceEntropyPage returns None (Back) or rolls (checkmark);
+# LongQuestionPage returns False (Back) or True (Continue).
+script = []
+class FakeDice:
+    def __init__(self, rolls='', **kw):
+        self.rolls = rolls
+    async def show(self):
+        action = script.pop(0)
+        if action == 'back':
+            return None
+        self.rolls = action
+        return action
+class FakeConfirm:
+    def __init__(self, **kw): pass
+    async def show(self):
+        return script.pop(0) == 'continue'
+pages.DiceEntropyPage = FakeDice
+pages.LongQuestionPage = FakeConfirm
+
+f = NewSeedFlow()
+f.seed_length = 12
+f.state = f.confirm_generate
+f.prev_states = [f.check_for_seed, f.pick_length]
+depth0 = len(f.prev_states)
+
+async def step(state):
+    f.state = state
+    await state()
+
+async def run():
+    # user types rolls, reaches confirm
+    script[:] = ['1234']
+    f.goto(f.enter_dice); await step(f.enter_dice)
+    assert f.state.__name__ == 'confirm_dice', f.state.__name__
+    d1 = len(f.prev_states)
+    # Back on confirm -> entry, stack must shrink (pop), not grow
+    script[:] = ['back']
+    await step(f.confirm_dice)
+    assert f.state.__name__ == 'enter_dice', f.state.__name__
+    d2 = len(f.prev_states)
+    assert f.dice_rolls == '1234', f.dice_rolls
+    # Back on entry -> leaves the dice screens entirely
+    script[:] = ['back']
+    await step(f.enter_dice)
+    assert f.state.__name__ == 'confirm_generate', f.state.__name__
+    d3 = len(f.prev_states)
+    # rolls preserved for a forward trip
+    assert f.dice_rolls == '1234', f.dice_rolls
+    return_value.write(repr((depth0, d1, d2, d3)).encode())
+
+uasyncio.run(run())
+''')
+    depth0, d1, d2, d3 = eval(out)
+    assert d1 == depth0 + 2          # confirm_generate, enter_dice pushed
+    assert d2 == depth0 + 1          # Back popped, did not push
+    assert d3 == depth0              # second Back pops to confirm_generate
