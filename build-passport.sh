@@ -8,7 +8,7 @@
 #   ./build-passport.sh                 # build + sign current checkout, version = version.txt + "b1"
 #   ./build-passport.sh 2.4.1           # override the version (becomes 2.4.1b1 unless a bN suffix is given)
 #   ./build-passport.sh --pull          # git pull first
-#   ./build-passport.sh --sd            # also copy firmware + pubkey to the mounted microSD
+#   ./build-passport.sh --sd            # also copy to the microSD (auto if one is mounted, else a numbered list)
 #   ./build-passport.sh --sd=/Volumes/PASSPORT   # explicit microSD mount point
 #   ./build-passport.sh --clean         # wipe build-Passport/ before building
 #
@@ -144,15 +144,33 @@ echo "  file sha:   $FILE_SHA"
 # ---------------------------------------------------------------- microSD
 if [[ -n "$SD_MOUNT" ]]; then
     if [[ "$SD_MOUNT" == "auto" ]]; then
-        # Pick the single removable volume if exactly one is mounted
+        # List removable volumes; auto-pick if exactly one, otherwise ask.
         candidates=()
         for v in /Volumes/*; do
             [[ -d "$v" && "$v" != "/Volumes/Macintosh HD" ]] || continue
             diskutil info "$v" 2>/dev/null | grep -q 'Removable Media: *Removable' && candidates+=("$v")
         done
-        [[ ${#candidates[@]} -eq 1 ]] || die "couldn't pick a microSD automatically (${#candidates[@]} removable volumes); use --sd=/Volumes/NAME"
-        SD_MOUNT="${candidates[0]}"
+        case ${#candidates[@]} in
+            0) die "no removable volume mounted; insert the microSD or use --sd=/Volumes/NAME" ;;
+            1) SD_MOUNT="${candidates[0]}" ;;
+            *)
+                bold "== Removable volumes"
+                for i in "${!candidates[@]}"; do
+                    size="$(diskutil info "${candidates[$i]}" 2>/dev/null | awk -F': *' '/Disk Size/ {print $2}' | awk '{print $1, $2}')"
+                    printf '  %d) %s  (%s)\n' "$((i + 1))" "${candidates[$i]}" "${size:-?}"
+                done
+                [[ -t 0 ]] || die "multiple removable volumes and no terminal to choose from; use --sd=/Volumes/NAME"
+                while :; do
+                    read -r -p "Copy to which volume? [1-${#candidates[@]}, q to skip]: " pick
+                    [[ "$pick" == "q" ]] && { echo "  skipped microSD copy"; SD_MOUNT=""; break; }
+                    [[ "$pick" =~ ^[0-9]+$ && pick -ge 1 && pick -le ${#candidates[@]} ]] && { SD_MOUNT="${candidates[$((pick - 1))]}"; break; }
+                    echo "  enter a number between 1 and ${#candidates[@]}"
+                done
+                ;;
+        esac
     fi
+fi
+if [[ -n "$SD_MOUNT" ]]; then
     [[ -d "$SD_MOUNT" ]] || die "microSD mount point not found: $SD_MOUNT"
     bold "== Copying to microSD at $SD_MOUNT"
     cp "$SIGNED" "$SD_MOUNT/"
