@@ -6,7 +6,7 @@
 #
 # Usage:
 #   ./build-passport.sh                 # build + sign current checkout, version = version.txt + "b1"
-#   ./build-passport.sh 2.4.1           # override the version stamped into the firmware header
+#   ./build-passport.sh 2.4.1           # override the version (becomes 2.4.1b1 unless a bN suffix is given)
 #   ./build-passport.sh --pull          # git pull first
 #   ./build-passport.sh --sd            # also copy firmware + pubkey to the mounted microSD
 #   ./build-passport.sh --sd=/Volumes/PASSPORT   # explicit microSD mount point
@@ -80,10 +80,15 @@ fi
 
 BRANCH="$(git rev-parse --abbrev-ref HEAD)"
 COMMIT="$(git rev-parse --short HEAD)"
-# Default: upstream version + "b1" so the splash shows e.g. "Version 2.4.0b1" and the
-# build is distinguishable from an official release. cosign allows one hex digit after "b".
-[[ -n "$VERSION" ]] || VERSION="$(tr -d '[:space:]' < version.txt)b1"
-[[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+[A-Za-z0-9]*$ ]] || die "version '$VERSION' doesn't look like X.Y.Z"
+# Version stamped into the signed header. Default is version.txt; a "bN" beta suffix
+# (one uppercase hex digit, per cosign's is_valid_version) is appended unless one was
+# given, so the splash reads e.g. "Version 2.4.0b1" and the build is distinguishable
+# from an official release. The header field is VERSION_LEN=8 bytes including the NUL,
+# and cosign does not check the length before strcpy, so enforce <= 7 chars here.
+[[ -n "$VERSION" ]] || VERSION="$(tr -d '[:space:]' < version.txt)"
+[[ "$VERSION" =~ ^[0-9]\.[0-9]{1,2}\.[0-9]{1,2}(b[0-9A-F])?$ ]] || die "version '$VERSION' must be X.Y.Z or X.Y.ZbN (N = one uppercase hex digit)"
+[[ "$VERSION" == *b* ]] || VERSION="${VERSION}b1"
+[[ ${#VERSION} -le 7 ]] || die "version '$VERSION' is ${#VERSION} chars; the firmware header holds at most 7"
 
 echo "  branch:  $BRANCH @ $COMMIT"
 echo "  version: $VERSION"
