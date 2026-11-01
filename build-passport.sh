@@ -5,7 +5,7 @@
 # build-passport.sh - Build and developer-sign Passport firmware on macOS.
 #
 # Usage:
-#   ./build-passport.sh                 # build + sign current checkout, version from version.txt
+#   ./build-passport.sh                 # build + sign current checkout, version = version.txt + "b1"
 #   ./build-passport.sh 2.4.1           # override the version stamped into the firmware header
 #   ./build-passport.sh --pull          # git pull first
 #   ./build-passport.sh --sd            # also copy firmware + pubkey to the mounted microSD
@@ -80,7 +80,9 @@ fi
 
 BRANCH="$(git rev-parse --abbrev-ref HEAD)"
 COMMIT="$(git rev-parse --short HEAD)"
-[[ -n "$VERSION" ]] || VERSION="$(tr -d '[:space:]' < version.txt)"
+# Default: upstream version + "b1" so the splash shows e.g. "Version 2.4.0b1" and the
+# build is distinguishable from an official release. cosign allows one hex digit after "b".
+[[ -n "$VERSION" ]] || VERSION="$(tr -d '[:space:]' < version.txt)b1"
 [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+[A-Za-z0-9]*$ ]] || die "version '$VERSION' doesn't look like X.Y.Z"
 
 echo "  branch:  $BRANCH @ $COMMIT"
