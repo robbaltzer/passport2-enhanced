@@ -5,7 +5,6 @@
 
 import common
 import trezorcrypto
-from utils import b2a_hex
 
 
 async def new_seed_task(on_done, seed_length, extra_entropy=None):
@@ -19,11 +18,10 @@ async def new_seed_task(on_done, seed_length, extra_entropy=None):
     # The hardware entropy is always included, so a weak die cannot weaken the seed
     # below what the hardware alone would produce, and a weak hardware RNG is
     # protected by the user's dice.
+    # extra_entropy is a str of ASCII dice rolls ('1'-'6'), or None.
     h = trezorcrypto.sha256(seed)
     if extra_entropy:
-        if isinstance(extra_entropy, str):
-            extra_entropy = extra_entropy.encode()
-        h.update(extra_entropy)
+        h.update(extra_entropy.encode())
     seed = h.digest()
 
     # Math to convert number of words to number of bytes

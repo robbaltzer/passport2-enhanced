@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: © 2022 Foundation Devices, Inc. <hello@foundation.xyz>
+# SPDX-FileCopyrightText: © 2026 Rob Baltzer
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
 # dice_entropy_page.py - Collect user-supplied dice rolls (keys 1-6) as additional
@@ -7,7 +7,8 @@
 import lvgl as lv
 from pages import Page
 from styles import Stylize
-from styles.colors import TEXT_GREY, FD_BLUE
+from styles.colors import TEXT_GREY, FD_BLUE, GREEN_HEX, COPPER_HEX
+from utils import recolor
 from styles.font_sizes import FONT_SMALL
 from views import Label
 from keys import KEY_1, KEY_6
@@ -18,6 +19,9 @@ from public_constants import DICE_BITS_PER_ROLL_MILLI as BITS_PER_ROLL_MILLI
 
 # Hard cap so the roll string can't grow without bound on-device
 MAX_DICE_ROLLS = 256
+
+# Most recent rolls shown on screen (older ones scroll off the left)
+VISIBLE_ROLLS = 80
 
 
 class DiceEntropyPage(Page):
@@ -31,16 +35,21 @@ class DiceEntropyPage(Page):
 
     def __init__(self,
                  rolls='',
+                 target_rolls=None,
                  card_header=None,
                  statusbar=None,
                  left_micron=microns.Back,
                  right_micron=microns.Checkmark):
+        # extend_timeout: rolling a physical die is slow, don't let a short
+        # auto-shutdown timer discard a long entry.
         super().__init__(card_header=card_header,
                          statusbar=statusbar,
                          left_micron=left_micron,
-                         right_micron=right_micron)
+                         right_micron=right_micron,
+                         extend_timeout=True)
 
         self.rolls = rolls
+        self.target_rolls = target_rolls
 
         with Stylize(self) as default:
             default.pad_row(6)
@@ -67,13 +76,24 @@ class DiceEntropyPage(Page):
 
     def update_views(self):
         n = len(self.rolls)
-        self.counter_view.set_text('{} roll{}  ~{} bits'.format(n, '' if n == 1 else 's', self.bits()))
+        if n >= MAX_DICE_ROLLS:
+            text = recolor(COPPER_HEX, '{} rolls  ~{} bits  (max)'.format(n, self.bits()))
+        else:
+            text = '{} roll{}  ~{} bits'.format(n, '' if n == 1 else 's', self.bits())
+            if self.target_rolls is not None:
+                text += ' / {}'.format(self.target_rolls)
+                if n >= self.target_rolls:
+                    text = recolor(GREEN_HEX, text)
+        self.counter_view.set_text(text)
 
-        # Group rolls in blocks of 5 for readability; show only the tail if it gets long
-        shown = self.rolls
-        if len(shown) > 100:
-            shown = '...' + shown[-100:]
+        # Show the most recent rolls, grouped in fives aligned to the real roll
+        # positions (group first, then add the ellipsis so alignment is preserved).
+        start = max(0, n - VISIBLE_ROLLS)
+        start -= start % 5
+        shown = self.rolls[start:]
         grouped = ' '.join(shown[i:i + 5] for i in range(0, len(shown), 5))
+        if start > 0:
+            grouped = '... ' + grouped
         self.rolls_view.set_text(grouped)
 
     def right_action(self, is_pressed):

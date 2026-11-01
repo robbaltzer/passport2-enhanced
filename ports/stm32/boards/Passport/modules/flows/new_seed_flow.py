@@ -61,40 +61,55 @@ class NewSeedFlow(Flow):
     async def enter_dice(self):
         from pages import DiceEntropyPage
 
-        rolls = await DiceEntropyPage(rolls=self.dice_rolls or '',
-                                      card_header={'title': 'Dice Entropy'}).show()
+        page = DiceEntropyPage(rolls=self.dice_rolls or '',
+                               target_rolls=self.target_rolls(),
+                               card_header={'title': 'Dice Entropy'})
+        rolls = await page.show()
         if rolls is None:
-            # User backed out of dice entry
-            self.dice_rolls = None
+            # User backed out of dice entry: keep whatever was typed so far so it
+            # is restored if the user comes forward again.
+            self.dice_rolls = page.rolls or None
             self.back()
             return
 
         self.dice_rolls = rolls
         self.goto(self.confirm_dice)
 
+    def target_rolls(self):
+        # Enough fair d6 rolls (~2.585 bits each) to match the seed's own entropy:
+        # 12 words = 128 bits -> 50 rolls, 24 words = 256 bits -> 99 rolls.
+        from public_constants import DICE_BITS_PER_ROLL_MILLI
+        seed_bits = (self.seed_length // 3) * 32
+        return (seed_bits * 1000 + DICE_BITS_PER_ROLL_MILLI - 1) // DICE_BITS_PER_ROLL_MILLI
+
     async def confirm_dice(self):
         import trezorcrypto
         from pages import LongQuestionPage
         from utils import b2a_hex
-        from public_constants import MIN_DICE_ROLLS, DICE_BITS_PER_ROLL_MILLI
+        from public_constants import DICE_BITS_PER_ROLL_MILLI
 
         n = len(self.dice_rolls)
         bits = (n * DICE_BITS_PER_ROLL_MILLI) // 1000
+        target = self.target_rolls()
         rolls_hash = b2a_hex(trezorcrypto.sha256(self.dice_rolls.encode()).digest()).decode()
 
         if n == 0:
             text = ('No dice rolls were entered.\n\nThe seed will be generated from '
                     'hardware entropy only. Continue?')
         else:
+            # NOTE: this hash covers the dice rolls only. It lets the user confirm the
+            # rolls were received exactly as typed; it does not reveal the hardware
+            # entropy and so cannot be used to recompute the final seed.
             text = ('{} roll{} entered (~{} bits).\n\n'
-                    'SHA-256 of rolls:\n{}\n{}\n\n'
+                    'SHA-256 of rolls as typed:\n{}\n{}\n\n'
                     'Continue?').format(n, '' if n == 1 else 's', bits,
                                         rolls_hash[:32], rolls_hash[32:])
-            if n < MIN_DICE_ROLLS:
-                text = ('WARNING: Only {} roll{} (~{} bits). {} rolls are recommended for '
-                        '~128 bits of dice entropy.\n\n'
-                        'SHA-256 of rolls:\n{}\n{}\n\n'
-                        'Continue anyway?').format(n, '' if n == 1 else 's', bits, MIN_DICE_ROLLS,
+            if n < target:
+                text = ('WARNING: Only {} roll{} (~{} bits). {} rolls are recommended to match '
+                        'a {}-word seed.\n\n'
+                        'SHA-256 of rolls as typed:\n{}\n{}\n\n'
+                        'Continue anyway?').format(n, '' if n == 1 else 's', bits, target,
+                                                   self.seed_length,
                                                    rolls_hash[:32], rolls_hash[32:])
 
         result = await LongQuestionPage(text=text,
