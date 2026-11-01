@@ -47,8 +47,7 @@ class NewSeedFlow(Flow):
 
     async def confirm_generate(self):
         # result = await QuestionPage(text='Generate a new seed phrase now?').show()
-        text = ('Passport will create and back up a new {}-word seed phrase.\n\n'
-                'UNOFFICIAL FIRMWARE: test use only.').format(self.seed_length)
+        text = 'Passport will create and back up a new {}-word seed phrase.'.format(self.seed_length)
         result = await YesNoChooserPage(text=text,
                                         yes_text='Continue',
                                         no_text='Back',
@@ -93,6 +92,7 @@ class NewSeedFlow(Flow):
         bits = (n * DICE_BITS_PER_ROLL_MILLI) // 1000
         target = self.target_rolls()
         rolls_hash = b2a_hex(trezorcrypto.sha256(self.dice_rolls.encode()).digest()).decode()
+        hash_lines = '\n'.join(rolls_hash[i:i + 16] for i in range(0, 64, 16))
 
         if n == 0:
             text = ('No dice rolls were entered.\n\nThe seed will be generated from '
@@ -105,17 +105,15 @@ class NewSeedFlow(Flow):
                     'Estimates assume fair, independent dice. Rolls beyond the target '
                     'add no further strength to a {}-word seed. Your seed words remain '
                     'the only backup.').format(self.seed_length)
-            text = ('{} roll{} entered (~{} bits).\n\n'
-                    'SHA-256 of rolls as typed:\n{}\n{}\n\n'
-                    '{}\n\nContinue?').format(n, '' if n == 1 else 's', bits,
-                                              rolls_hash[:32], rolls_hash[32:], note)
+            text = ('{} roll{}, ~{} bits\n\n'
+                    'SHA-256 of rolls as typed:\n{}\n\n'
+                    '{}\n\nContinue?').format(n, '' if n == 1 else 's', bits, hash_lines, note)
             if n < target:
                 text = ('WARNING: Only {} roll{} (~{} bits). {} rolls are recommended to match '
                         'a {}-word seed.\n\n'
-                        'SHA-256 of rolls as typed:\n{}\n{}\n\n'
+                        'SHA-256 of rolls as typed:\n{}\n\n'
                         '{}\n\nContinue anyway?').format(n, '' if n == 1 else 's', bits, target,
-                                                         self.seed_length,
-                                                         rolls_hash[:32], rolls_hash[32:], note)
+                                                         self.seed_length, hash_lines, note)
 
         result = await LongQuestionPage(text=text,
                                         card_header={'title': 'Dice Entropy'},

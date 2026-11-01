@@ -56,8 +56,9 @@ class DiceEntropyPage(Page):
             default.pad_row(6)
             default.pad(left=8, right=8)
 
-        self.title_view = Label(text='Roll a die and press the matching key (1-6), '
-                                     'one press per roll. Check the list below.',
+        self.title_view = Label(text='UNOFFICIAL FIRMWARE\n'
+                                     'Roll a die and press the matching key (1-6), '
+                                     'one press per roll.',
                                 color=TEXT_GREY, center=True)
         self.title_view.set_width(lv.pct(100))
         self.add_child(self.title_view)
