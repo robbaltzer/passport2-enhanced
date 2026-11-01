@@ -6,6 +6,17 @@ SPDX-License-Identifier: GPL-3.0-or-later
 
 # Passport Wallet Firmware
 
+> **Unofficial fork — read before installing.**
+> This repository (`passport2-enhanced`) is an independent fork of
+> [Foundation's Passport firmware](https://github.com/Foundation-Devices/passport2).
+> It is **not reviewed, signed, or supported by Foundation Devices**, and it
+> **modifies seed generation** (user dice rolls are mixed into the hardware
+> entropy when creating a new seed). Installing it requires loading your own
+> developer public key onto Passport, which bypasses Foundation's 2-of-4
+> firmware signature check. **Do not use this firmware on a device holding funds
+> you cannot afford to lose.** Provided under GPLv3 **with no warranty of any
+> kind**; see [LICENSE](LICENSE), sections 15 and 16.
+
 Passport is an ultra-secure, open source hardware wallet for Bitcoin that offers excellent usability and a great design.
 
 Get yours at [foundationdevices.com](https://foundationdevices.com) and [follow @FOUNDATIONdvcs on Twitter](https://twitter.com/FOUNDATIONdvcs) to keep up with the latest updates and security alerts.
