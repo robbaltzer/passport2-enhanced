@@ -17,6 +17,32 @@ SPDX-License-Identifier: GPL-3.0-or-later
 > you cannot afford to lose.** Provided under GPLv3 **with no warranty of any
 > kind**; see [LICENSE](LICENSE), sections 15 and 16.
 
+### Building, installing and recovering (this fork)
+
+- Build and sign on macOS with `./build-passport.sh` (see its header for options). It stamps
+  `X.Y.ZbN` so the boot splash is distinguishable from an official release.
+- First install only: copy `~/bin/keys/user-pub.bin` to the microSD and load it on Passport via
+  Settings → Advanced → Developer Pubkey → Install PubKey. Then Settings → Firmware → Update
+  Firmware with the signed `.bin`.
+- **Recovery** if the firmware will not boot. The bootloader is untouched by microSD updates and
+  has a recovery mode that reads an **official, Foundation-signed** image **raw** from the card
+  (developer-signed images are refused):
+  1. Download `vX.Y.Z-passport.bin` from
+     [Foundation's releases](https://github.com/Foundation-Devices/passport2/releases) and verify
+     its SHA-256 against the release notes.
+  2. Write it raw to the card. Use the buffered device, not `rdisk`: the raw device requires whole
+     512-byte sectors and silently truncates the last partial block with `bs=1m`.
+     ```
+     diskutil list                         # identify the card, e.g. /dev/disk6
+     diskutil unmountDisk /dev/disk6
+     sudo dd if=vX.Y.Z-passport.bin of=/dev/disk6 bs=1m
+     sudo diskutil eject /dev/disk6
+     ```
+  3. Insert the card, power on, and hold **9** during the splash. Choose Firmware Recovery.
+  4. Afterwards the card has no filesystem; reformat it before normal use:
+     `diskutil eraseDisk FAT32 PASSPORT MBRFormat /dev/disk6`.
+- A hung UI can be powered off by holding the power button; as a last resort remove the battery.
+
 Passport is an ultra-secure, open source hardware wallet for Bitcoin that offers excellent usability and a great design.
 
 Get yours at [foundationdevices.com](https://foundationdevices.com) and [follow @FOUNDATIONdvcs on Twitter](https://twitter.com/FOUNDATIONdvcs) to keep up with the latest updates and security alerts.
