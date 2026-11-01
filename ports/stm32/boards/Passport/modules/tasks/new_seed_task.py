@@ -16,8 +16,8 @@ async def new_seed_task(on_done, seed_length, extra_entropy=None):
     # If the user supplied additional entropy (e.g. dice rolls), it is appended to the
     # hardware entropy before hashing:  seed = SHA256(hw_entropy || extra_entropy)
     # The hardware entropy is always included, so a weak die cannot weaken the seed
-    # below what the hardware alone would produce, and a weak hardware RNG is
-    # protected by the user's dice.
+    # below what the hardware alone would produce; conversely, a weak hardware RNG
+    # can be compensated for to the extent the dice are fair and independent.
     # extra_entropy is a str of ASCII dice rolls ('1'-'6'), or None.
     h = trezorcrypto.sha256(seed)
     if extra_entropy:

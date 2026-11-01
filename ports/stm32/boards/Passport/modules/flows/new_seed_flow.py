@@ -100,17 +100,19 @@ class NewSeedFlow(Flow):
             # NOTE: this hash covers the dice rolls only. It lets the user confirm the
             # rolls were received exactly as typed; it does not reveal the hardware
             # entropy and so cannot be used to recompute the final seed.
+            note = ('Hardware entropy is always included; dice are added to it. '
+                    'Estimates assume fair, independent dice.')
             text = ('{} roll{} entered (~{} bits).\n\n'
                     'SHA-256 of rolls as typed:\n{}\n{}\n\n'
-                    'Continue?').format(n, '' if n == 1 else 's', bits,
-                                        rolls_hash[:32], rolls_hash[32:])
+                    '{}\n\nContinue?').format(n, '' if n == 1 else 's', bits,
+                                              rolls_hash[:32], rolls_hash[32:], note)
             if n < target:
                 text = ('WARNING: Only {} roll{} (~{} bits). {} rolls are recommended to match '
                         'a {}-word seed.\n\n'
                         'SHA-256 of rolls as typed:\n{}\n{}\n\n'
-                        'Continue anyway?').format(n, '' if n == 1 else 's', bits, target,
-                                                   self.seed_length,
-                                                   rolls_hash[:32], rolls_hash[32:])
+                        '{}\n\nContinue anyway?').format(n, '' if n == 1 else 's', bits, target,
+                                                         self.seed_length,
+                                                         rolls_hash[:32], rolls_hash[32:], note)
 
         result = await LongQuestionPage(text=text,
                                         card_header={'title': 'Dice Entropy'},
