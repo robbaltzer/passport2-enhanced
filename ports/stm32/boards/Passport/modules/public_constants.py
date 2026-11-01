@@ -165,6 +165,9 @@ Derivation: {}
 '''
 
 TAP_TWEAK_SHA256 = "e80fe1639c9ca050e3af1b39c143c63e429cbceb15d940fbb5c5a1f4af57c5e9"
+# Identifies this build as an unofficial fork; shown on the boot warning page
+FORK_NAME = 'passport2-enhanced'
+
 # Dice entropy mixed into new seeds (NewSeedFlow / DiceEntropyPage)
 DICE_BITS_PER_ROLL_MILLI = const(2585)  # log2(6) * 1000, assumes a fair d6
 

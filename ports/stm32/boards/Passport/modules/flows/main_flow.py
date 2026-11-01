@@ -10,11 +10,25 @@ class MainFlow(Flow):
     def __init__(self):
         super().__init__(initial_state=self.start, name='MainFlow')
 
+    async def show_fork_warning(self):
+        # Shown on every boot. This firmware is an unofficial fork that changes seed
+        # generation and is installed under a developer key; make sure nobody treats
+        # it as a production wallet.
+        from pages import ErrorPage
+        from public_constants import FORK_NAME
+        import microns
+
+        await ErrorPage(text='{}\n\nUNOFFICIAL FIRMWARE\nTest use only.\n\n'
+                             'Do NOT store real funds on this device.'.format(FORK_NAME),
+                        right_micron=microns.Checkmark).show()
+
     async def start(self):
         import common
         from utils import start_task, is_logged_in, has_seed, xfp2str, get_accounts
         from flows import SelectSetupModeFlow, LoginFlow, InitialSeedSetupFlow
         from extensions.extensions import supported_extensions
+
+        await self.show_fork_warning()
 
         await SelectSetupModeFlow().run()
 
