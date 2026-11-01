@@ -11,16 +11,23 @@ class MainFlow(Flow):
         super().__init__(initial_state=self.start, name='MainFlow')
 
     async def show_fork_warning(self):
-        # Shown on every boot. This firmware is an unofficial fork that changes seed
-        # generation and is installed under a developer key; make sure nobody treats
-        # it as a production wallet.
-        from pages import ErrorPage
-        from public_constants import FORK_NAME
-        import microns
+        # Shown on every boot, after login. This firmware is an unofficial fork that
+        # changes seed generation and is installed under a developer key; make sure
+        # nobody treats it as a production wallet.
+        #
+        # Deliberately NOT shown before LoginFlow: the stock pre-login sequence is
+        # left untouched, and a failure here must never be able to block boot, so
+        # any exception is swallowed.
+        try:
+            from pages import ErrorPage
+            from public_constants import FORK_NAME
+            import microns
 
-        await ErrorPage(text='{}\n\nUNOFFICIAL FIRMWARE\nTest use only.\n\n'
-                             'Do NOT store real funds on this device.'.format(FORK_NAME),
-                        right_micron=microns.Checkmark).show()
+            await ErrorPage(text='{}\n\nUNOFFICIAL FIRMWARE\nTest use only.\n\n'
+                                 'Do NOT store real funds on this device.'.format(FORK_NAME),
+                            right_micron=microns.Checkmark).show()
+        except Exception:
+            pass
 
     async def start(self):
         import common
@@ -28,12 +35,12 @@ class MainFlow(Flow):
         from flows import SelectSetupModeFlow, LoginFlow, InitialSeedSetupFlow
         from extensions.extensions import supported_extensions
 
-        await self.show_fork_warning()
-
         await SelectSetupModeFlow().run()
 
         if not is_logged_in():
             await LoginFlow().run()
+
+        await self.show_fork_warning()
 
         if not has_seed():
             await InitialSeedSetupFlow(allow_backtrack=False).run()
