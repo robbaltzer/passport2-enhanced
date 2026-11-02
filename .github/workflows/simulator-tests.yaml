@@ -42,6 +42,7 @@ jobs:
       # Upstream's test_unit.py drives simulator.py, which needs SDL and a display.
       - name: Run upstream simulator unit tests (xvfb, non-blocking)
         continue-on-error: true
+        timeout-minutes: 8
         working-directory: ports/stm32/boards/Passport/modules/tests
         run: |
           sudo apt-get install -y xvfb
