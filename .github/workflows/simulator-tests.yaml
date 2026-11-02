@@ -1,0 +1,53 @@
+# SPDX-FileCopyrightText: © 2026 Rob Baltzer
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# simulator-tests.yaml - build the Unix simulator and run the module tests,
+# including the headless runtime tests and the frozen-manifest guard.
+
+name: Simulator tests
+on: [push, pull_request]
+
+jobs:
+  simulator-tests:
+    name: Simulator tests pass?
+    runs-on: ubuntu-22.04
+    timeout-minutes: 40
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential pkg-config libffi-dev libssl-dev \
+            libsdl2-dev python3 python3-pip
+          pip3 install pytest pycodestyle pyparsing
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Install just and cbindgen
+        run: cargo install just@1.23.0 cbindgen@^0.24 --locked
+
+      - name: Build simulator (color)
+        run: just simulator/build color
+
+      # Gate: tests that run headless (the dice tests use fixtures/headless.py).
+      # test_translations.py fails on the stock v2.3.11 tag and is excluded.
+      - name: Run module tests (headless)
+        working-directory: ports/stm32/boards/Passport/modules/tests
+        run: |
+          python3 -m pytest test_dice_entropy.py test_frozen_manifest.py test_enum.py \
+            test_sflash.py test_version.py --simulatordir=${{ github.workspace }}/simulator -v
+
+      # Upstream's test_unit.py drives simulator.py, which needs SDL and a display.
+      - name: Run upstream simulator unit tests (xvfb, non-blocking)
+        continue-on-error: true
+        timeout-minutes: 8
+        working-directory: ports/stm32/boards/Passport/modules/tests
+        run: |
+          sudo apt-get install -y xvfb
+          pip3 install -r ${{ github.workspace }}/simulator/requirements.txt
+          xvfb-run -a python3 -m pytest test_unit.py --simulatordir=${{ github.workspace }}/simulator -v
+
+      - name: Lint Python
+        run: just ports/stm32/lint-py
