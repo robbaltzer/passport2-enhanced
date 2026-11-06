@@ -17,6 +17,8 @@ jobs:
   rust-code-compiles:
     name: Rust code compiles?
     runs-on: ubuntu-latest
+    # Normally ~1.5 min; an apt mirror hang once ran past 13 min.
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/rust-toolchain
@@ -26,7 +28,9 @@ jobs:
       - run: |
           cargo check --manifest-path extmod/foundation-rust/Cargo.toml
       # Required by secp256k1-sys.
-      - run: sudo apt-get install -y gcc-arm-none-eabi
+      - run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-arm-none-eabi
       - run: |
           cargo check --manifest-path extmod/foundation-rust/Cargo.toml \
                       --target thumbv7em-none-eabihf
