@@ -30,15 +30,20 @@ jobs:
 
       # Prebuilt binaries; compiling them with cargo install took ~1.5 minutes.
       - name: Install just
-        uses: taiki-e/install-action@v2
+        uses: taiki-e/install-action@c509219cf42fba86913069efd0ade2458c59337b # v2
         with:
           tool: just@1.23.0
 
+      # Mozilla publishes no digest for this asset; the hash is of the binary as
+      # downloaded on 2026-11-05. A mismatch fails the job before anything runs.
       - name: Install cbindgen
         run: |
-          sudo curl -fsSL -o /usr/local/bin/cbindgen \
+          curl -fsSL -o cbindgen \
             https://github.com/mozilla/cbindgen/releases/download/v0.24.3/cbindgen
-          sudo chmod +x /usr/local/bin/cbindgen
+          echo "c4e9bc396922939762ee66304cb29316c55b78ef49b51f5a94ec478eb1257e08  cbindgen" \
+            | sha256sum -c -
+          sudo install -m 755 cbindgen /usr/local/bin/cbindgen
+          rm cbindgen
           cbindgen --version
 
       - name: Build simulator (color)
