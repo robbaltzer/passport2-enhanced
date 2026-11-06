@@ -75,8 +75,10 @@ considered working until it has been flashed and exercised on the Passport.
   keys at `~/bin/keys/user.pem` + `user-pub.bin` (`./tools/genkeys.sh 1`; never
   commit keys; `.gitignore` covers `dist/`).
 - `./build-passport.sh [--pull] [--clean] [--sd[=/Volumes/NAME]] [X.Y.Z]`
-  - Rebuilds the Docker image automatically if the Dockerfile base changed
-    (2.3.11 = ubuntu:20.04; 2.4.0 was 24.04 — a stale image fails `mpy-cross`).
+  - Builds the Docker image only if none exists; it does **not** detect a stale
+    one (2.3.11 = ubuntu:20.04; 2.4.0 was 24.04 — a stale image fails `mpy-cross`).
+    After a base change, `docker rmi foundation-devices/passport2:latest` first.
+    Auto-rebuild is commit `e3c75d55` on branch `fix-version-marker`, never merged.
   - `--clean` after switching branches: stale LVGL bindings in `build-Passport/`
     fail with `'ICON_LIST' undeclared`.
   - Version is stamped into a 7-char header field. `2.3.11` already fills it, so
@@ -104,9 +106,15 @@ considered working until it has been flashed and exercised on the Passport.
 - Simulator must be rebuilt (`make clean` in `simulator/`) when switching bases.
 - Local lint: `cd ports/stm32 && just lint-py`; `reuse lint` (6 upstream files fail
   locally on this tag; CI's REUSE action passes).
-- GitHub Actions is enabled: `build.yaml`, `lint.yaml` (upstream) and
-  `simulator-tests.yaml` (ours: headless gate of 27 tests, upstream SDL
-  `test_unit.py` non-blocking under xvfb, lint-py). All green at #10.
+- GitHub Actions: `lint.yaml` (upstream) and `simulator-tests.yaml` (ours:
+  headless gate of 27 tests, upstream SDL `test_unit.py` non-blocking under xvfb,
+  lint-py, pycodestyle pinned) run on PRs and on pushes to `release-2.3.11` only.
+  For current status check the Actions tab — don't trust a "green" note here
+  (Lint was red from #11 until #12 and nobody noticed).
+- `build.yaml` (upstream) is manual-only (#13) and has **never** run on this fork:
+  it targets the retired `ubuntu-20.04` runner (jobs queue until auto-cancelled
+  after 24 h) and there is no `UserSigningKey` secret. CI does not produce
+  firmware; every image comes from `build-passport.sh`.
 - The simulator keypad shim passes `*` as the raw char; hardware sends
   `LV_KEY_BACKSPACE`. The dice page accepts both.
 - The hardware keypad drops a repeat of the same key within 120 ms (upstream
