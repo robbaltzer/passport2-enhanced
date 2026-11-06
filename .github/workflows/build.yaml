@@ -4,7 +4,10 @@
 # validate_and_build.yaml - GitHub actions for Passport
 
 name: Build
-on: [push]
+# Fork: manual only. Every job targets the retired ubuntu-20.04 runner and the
+# fork has no UserSigningKey secret, so push-triggered runs only ever queued
+# until GitHub cancelled them. Firmware is built locally with build-passport.sh.
+on: [workflow_dispatch]
 jobs:
   firmware:
     name: Firmware

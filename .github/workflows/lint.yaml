@@ -2,7 +2,10 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 name: Lint
-on: [push, pull_request]
+on:
+  push:
+    branches: [release-2.3.11]
+  pull_request:
 jobs:
   is-reuse-compliant:
     name: Is REUSE compliant?
