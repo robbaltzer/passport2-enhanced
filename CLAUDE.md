@@ -75,10 +75,10 @@ considered working until it has been flashed and exercised on the Passport.
   keys at `~/bin/keys/user.pem` + `user-pub.bin` (`./tools/genkeys.sh 1`; never
   commit keys; `.gitignore` covers `dist/`).
 - `./build-passport.sh [--pull] [--clean] [--sd[=/Volumes/NAME]] [X.Y.Z]`
-  - Builds the Docker image only if none exists; it does **not** detect a stale
-    one (2.3.11 = ubuntu:20.04; 2.4.0 was 24.04 — a stale image fails `mpy-cross`).
-    After a base change, `docker rmi foundation-devices/passport2:latest` first.
-    Auto-rebuild is commit `e3c75d55` on branch `fix-version-marker`, never merged.
+  - Rebuilds the Docker image automatically when the Dockerfile `FROM` line
+    differs from the image's `passport2.base` label (2.3.11 = ubuntu:20.04; 2.4.0
+    was 24.04 — a stale image fails `mpy-cross`). An unlabelled image (built by
+    `just build-docker` directly) is rebuilt once; with a warm cache that's seconds.
   - `--clean` after switching branches: stale LVGL bindings in `build-Passport/`
     fail with `'ICON_LIST' undeclared`.
   - Version is stamped into a 7-char header field. `2.3.11` already fills it, so
