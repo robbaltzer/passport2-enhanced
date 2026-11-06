@@ -1,3 +1,9 @@
+<!--
+SPDX-FileCopyrightText: © 2026 Rob Baltzer
+
+SPDX-License-Identifier: GPL-3.0-or-later
+-->
+
 # CLAUDE.md — passport2-enhanced
 
 Project context for Claude Code. Read fully before changing anything.
