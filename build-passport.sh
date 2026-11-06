@@ -102,10 +102,19 @@ echo "  branch:  $BRANCH @ $COMMIT"
 echo "  version: $VERSION"
 echo "  screen:  $SCREEN"
 
-# Docker image present?
+# Docker image present and built from this checkout's Dockerfile? The image tag is
+# the same across upstream versions but the base OS/toolchain differs (20.04 vs
+# 24.04), and a mismatched image fails the build with -Werror compiler errors.
+WANT_BASE="$(awk '/^FROM/ {print $2; exit}' Dockerfile)"
+HAVE_BASE="$(docker image inspect foundation-devices/passport2:latest --format '{{index .Config.Labels "passport2.base"}}' 2>/dev/null || true)"
 if ! docker image inspect foundation-devices/passport2:latest >/dev/null 2>&1; then
     bold "== Building Docker image (first time only, slow)"
     just build-docker
+    docker build -q --label "passport2.base=$WANT_BASE" -t foundation-devices/passport2:latest . >/dev/null
+elif [[ "$HAVE_BASE" != "$WANT_BASE" ]]; then
+    bold "== Docker image was built for '${HAVE_BASE:-unknown}', this checkout wants '$WANT_BASE' - rebuilding"
+    just build-docker
+    docker build -q --label "passport2.base=$WANT_BASE" -t foundation-devices/passport2:latest . >/dev/null
 fi
 
 if [[ $DO_CLEAN -eq 1 ]]; then
