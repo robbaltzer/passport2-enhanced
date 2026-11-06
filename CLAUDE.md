@@ -22,12 +22,11 @@ the only test device. Mac: `~/Documents/passport2-enhanced`, Apple Silicon.
 - `release-2.3.11` — **default and only live branch.** Equals Foundation's `v2.3.11`
   tag (their latest official release) plus the fork's commits. All work branches from
   and merges to this.
-- `dev-v2.4.0` — **dead.** Based on upstream's unreleased dev branch; carries a
-  manifest bug that makes it unbootable on hardware. Do not build or merge from it.
-  Should be deleted.
-- Feature branches (`dice-entropy*`, `fix-*`, `ui-fixes`, `ci-and-guard`) are merged
-  and can be deleted.
-- Upstream: `https://github.com/Foundation-Devices/passport2`. To take a new release:
+- No other branches exist. `dev-v2.4.0` (based on upstream's unreleased dev branch;
+  unbootable manifest bug) and all merged feature branches have been deleted. Delete
+  a feature branch once its PR merges.
+- Upstream: `https://github.com/Foundation-Devices/passport2` (not configured as a
+  remote in this clone; `git remote add upstream <url>` first). To take a new release:
   `git fetch upstream --tags`, create `release-X.Y.Z` from the tag, cherry-pick the
   fork commits, rebuild the Docker image and clean `build-Passport/` (see Build).
 
