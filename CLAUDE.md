@@ -107,8 +107,10 @@ considered working until it has been flashed and exercised on the Passport.
 - Local lint: `cd ports/stm32 && just lint-py`; `reuse lint` (6 upstream files fail
   locally on this tag; CI's REUSE action passes).
 - GitHub Actions: `lint.yaml` (upstream) and `simulator-tests.yaml` (ours:
-  headless gate of 27 tests, upstream SDL `test_unit.py` non-blocking under xvfb,
-  lint-py, pycodestyle pinned) run on PRs and on pushes to `release-2.3.11` only.
+  headless gate of 27 tests, lint-py, pycodestyle pinned) run on PRs and on pushes
+  to `release-2.3.11` only. Upstream's SDL `test_unit.py` is not run: under xvfb it
+  hit its 8-minute timeout on every run and was removed (#16); `just` and `cbindgen`
+  are prebuilt downloads, not `cargo install`.
   For current status check the Actions tab — don't trust a "green" note here
   (Lint was red from #11 until #12 and nobody noticed).
 - `build.yaml` (upstream) is manual-only (#13) and has **never** run on this fork:
