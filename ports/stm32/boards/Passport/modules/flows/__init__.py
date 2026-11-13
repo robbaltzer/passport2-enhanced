@@ -46,6 +46,7 @@ from .health_check_qr_flow import *
 from .import_multisig_wallet_flow import *
 from .import_multisig_wallet_from_microsd_flow import *
 from .import_multisig_wallet_from_qr_flow import *
+from .generate_seed_words_flow import *
 from .install_dev_pubkey_flow import *
 from .list_files_flow import *
 from .new_account_flow import *

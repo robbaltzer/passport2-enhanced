@@ -56,6 +56,11 @@ the only test device. Mac: `~/Documents/passport2-enhanced`, Apple Silicon.
 - `flows/main_flow.py` — `show_fork_warning()` runs **after** `LoginFlow`, never
   before (the pre-login path has a `Flow.run` spin on swallowed exceptions).
 - `public_constants.py` — `FORK_NAME`, `DICE_BITS_PER_ROLL_MILLI = 2585`.
+- `flows/generate_seed_words_flow.py` — More card → **Generate Seed Words**: makes a
+  12/24-word phrase with `new_seed_task` (same `noise.ALL` entropy, no dice) and
+  shows it once. It must never store anything: no `save_seed_task`, no settings
+  writes, no `settings_key` on the flow. `tests/test_generate_seed_words.py` checks
+  this. Not to be confused with upstream's **Temporary Seed**, which loads a seed.
 
 ## The rule that bricked the device once
 
