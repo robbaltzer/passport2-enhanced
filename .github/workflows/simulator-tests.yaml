@@ -54,8 +54,8 @@ jobs:
       - name: Run module tests (headless)
         working-directory: ports/stm32/boards/Passport/modules/tests
         run: |
-          python3 -m pytest test_dice_entropy.py test_frozen_manifest.py test_enum.py \
-            test_sflash.py test_version.py --simulatordir=${{ github.workspace }}/simulator -v
+          python3 -m pytest test_dice_entropy.py test_generate_seed_words.py test_frozen_manifest.py \
+            test_enum.py test_sflash.py test_version.py --simulatordir=${{ github.workspace }}/simulator -v
 
       - name: Lint Python
         run: just ports/stm32/lint-py
