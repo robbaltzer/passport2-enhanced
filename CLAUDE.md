@@ -57,8 +57,11 @@ the only test device. Mac: `~/Documents/passport2-enhanced`, Apple Silicon.
   before (the pre-login path has a `Flow.run` spin on swallowed exceptions).
 - `public_constants.py` — `FORK_NAME`, `DICE_BITS_PER_ROLL_MILLI = 2585`.
 - `flows/generate_seed_words_flow.py` — More card → **Generate Seed Words**: makes a
-  12/24-word phrase with `new_seed_task` (same `noise.ALL` entropy, no dice) and
-  shows it once. It must never store anything: no `save_seed_task`, no settings
+  12/24-word phrase with `new_seed_task` (same `noise.ALL` entropy) and shows it
+  once. Dice are **optional** here ("Add Dice Rolls" / "Skip"); the dice states are
+  New Seed's own (`enter_dice`, `confirm_dice`, `target_rolls` assigned into the
+  flow), so changes to them affect both flows, and the flow needs a `generate_seed`
+  state for `confirm_dice` to continue to. It must never store anything: no `save_seed_task`, no settings
   writes, no `settings_key` on the flow. `tests/test_generate_seed_words.py` checks
   this. Not to be confused with upstream's **Temporary Seed**, which loads a seed.
 
