@@ -45,7 +45,15 @@ class GenerateSeedWordsFlow(Flow):
         if result:
             self.goto(self.pick_length)
         else:
-            self.set_result(False)
+            self.finish(False)
+
+    def finish(self, result):
+        # Every exit goes through here, so rolls typed and then abandoned (Back all the
+        # way out) don't outlive the flow's use of them. Releases names only; see
+        # generate_seed for why buffers aren't scrubbed.
+        self.dice_rolls = None
+        self.words = None
+        self.set_result(result)
 
     async def pick_length(self):
         from public_constants import SEED_LENGTHS
@@ -94,11 +102,21 @@ class GenerateSeedWordsFlow(Flow):
             self.goto(self.show_words)
 
     async def show_words(self):
+        from flows import SeedWarningFlow
         from pages import SeedWordsListPage
 
-        # No Back here: going back would mean generating a different phrase, so the
-        # only way out is the checkmark once the words have been written down. Back on
-        # the first page just shows the same words again (as in ViewSeedWordsFlow).
+        # The stock warning shown before seed words, in its non-skippable form: there is
+        # no Cancel, so a freshly generated phrase (perhaps after 100 dice rolls) can't
+        # be discarded by accident. Shown right before the words, when it matters most.
+        warned = False
+        while not warned:
+            warned = await SeedWarningFlow(action_text='display a new seed phrase',
+                                           allow_skip=False).run()
+
+        # The words page has no Back icon: going back would mean generating a different
+        # phrase, so the only way out is the checkmark once the words are written down.
+        # Pressing the Back key on the first page just shows the same words again (as in
+        # ViewSeedWordsFlow).
         result = False
         while not result:
             page = SeedWordsListPage(words=self.words)
@@ -113,8 +131,8 @@ class GenerateSeedWordsFlow(Flow):
 
     async def show_done(self):
         await SuccessPage(text='Seed words cleared from the screen. Nothing was saved.').show()
-        self.set_result(True)
+        self.finish(True)
 
     async def show_error(self):
         await ErrorPage(text='Unable to generate seed: {}'.format(self.error)).show()
-        self.set_result(False)
+        self.finish(False)

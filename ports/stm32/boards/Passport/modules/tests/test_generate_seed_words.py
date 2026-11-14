@@ -111,6 +111,23 @@ class FakeDiceConfirm:
     async def show(self):
         await uasyncio.sleep_ms(0)
         return script.pop(0)
+# The seed warning answers from its own queue (default: acknowledged) so the page
+# scripts above stay unchanged; it records how it was configured and when it ran.
+warning_answers = []
+class FakeWarning:
+    def __init__(self, **kwargs):
+        calls.setdefault('warning', []).append(kwargs)
+    async def run(self):
+        await uasyncio.sleep_ms(0)
+        calls.setdefault('order', []).append('warning')
+        return warning_answers.pop(0) if warning_answers else True
+_real_fake_words_show = FakeWords.show
+async def words_show_recording_order(self):
+    calls.setdefault('order', []).append('words')
+    return await _real_fake_words_show(self)
+FakeWords.show = words_show_recording_order
+import flows
+flows.SeedWarningFlow = FakeWarning
 gswf.YesNoChooserPage = FakeYesNo
 gswf.SuccessPage = FakeMessage
 gswf.ErrorPage = FakeMessage
@@ -297,3 +314,41 @@ return_value.write(repr((result, calls['shown'], expected_words(24), common.nois
     assert result is True
     assert shown == [expected]
     assert sources == [7]
+
+
+def test_seed_warning_shown_once_before_the_words(headless):
+    out = _run(headless, r'''
+flow, result = run_flow([True, 24, 'skip', False, True])
+return_value.write(repr((result, calls.get('warning'), calls.get('order'))).encode())
+''')
+    result, warning, order = out
+    assert result is True
+    assert warning == [{'action_text': 'display a new seed phrase', 'allow_skip': False}]
+    # warning first, then the words page (re-shown once after Back), never warned twice
+    assert order == ['warning', 'words', 'words']
+
+
+def test_seed_warning_repeats_until_acknowledged(headless):
+    """The warning can't be used to discard a freshly generated phrase."""
+    out = _run(headless, r'''
+warning_answers[:] = [False, None, True]
+flow, result = run_flow([True, 12, 'skip', True])
+return_value.write(repr((result, calls.get('order'), len(calls['shown']))).encode())
+''')
+    result, order, shown = out
+    assert result is True
+    assert order == ['warning', 'warning', 'warning', 'words']
+    assert shown == 1
+
+
+def test_rolls_cleared_when_leaving_without_generating(headless):
+    """Type rolls, then Back all the way out: the flow must not keep them."""
+    out = _run(headless, r'''
+flow, result = run_flow([True, 12, 'dice', 'back:4321', None, None, False])
+return_value.write(repr((result, flow.dice_rolls, calls['dice_prefill'], common.noise.sources)).encode())
+''')
+    result, rolls, prefill, sources = out
+    assert result is False
+    assert rolls is None
+    assert prefill == ['']
+    assert sources == []        # nothing generated, no entropy read
