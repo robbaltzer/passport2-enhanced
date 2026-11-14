@@ -54,7 +54,9 @@ async def fake_spinner(text, task, args=(), **kwargs):
 gswf.spinner_task = fake_spinner
 
 # Each page pops its answer from `script`: True/False for Continue/Back on the
-# intro, a word count or None for the length chooser, True/False for the words page.
+# intro; a word count or None for the length chooser; 'dice', 'skip' or None for the
+# dice question; a roll string or 'back' for dice entry; True/False for the dice
+# confirmation; True/False for the words page.
 script = []
 class FakeYesNo:
     def __init__(self, **kwargs): pass
@@ -70,14 +72,32 @@ class FakeWords:
 class FakeMessage:
     def __init__(self, text=None, **kwargs): calls['messages'].append(text)
     async def show(self): return True
+class FakeDice:
+    def __init__(self, rolls='', **kwargs):
+        self.rolls = rolls
+        calls.setdefault('dice_prefill', []).append(rolls)
+    async def show(self):
+        action = script.pop(0)
+        if action == 'back':
+            return None
+        self.rolls = action
+        return action
+class FakeDiceConfirm:
+    def __init__(self, text=None, **kwargs): calls.setdefault('dice_confirm', []).append(text)
+    async def show(self): return script.pop(0)
 gswf.YesNoChooserPage = FakeYesNo
 gswf.SuccessPage = FakeMessage
 gswf.ErrorPage = FakeMessage
 pages.ChooserPage = FakeChooser
 pages.SeedWordsListPage = FakeWords
+pages.DiceEntropyPage = FakeDice
+pages.LongQuestionPage = FakeDiceConfirm
 
-def expected_words(length):
-    entropy = trezorcrypto.sha256(HW).digest()[:(length // 3) * 4]
+def expected_words(length, rolls=''):
+    h = trezorcrypto.sha256(HW)
+    if rolls:
+        h.update(rolls.encode())
+    entropy = h.digest()[:(length // 3) * 4]
     return trezorcrypto.bip39.from_data(entropy).split(' ')
 
 def run_flow(answers, noise_ok=True):
@@ -95,7 +115,7 @@ def _run(headless, body):
 
 def test_twelve_words_come_from_all_hardware_sources(headless):
     out = _run(headless, r'''
-flow, result = run_flow([True, 12, True])
+flow, result = run_flow([True, 12, 'skip', True])
 return_value.write(repr({
     'result': result,
     'shown': calls['shown'],
@@ -120,7 +140,7 @@ return_value.write(repr({
 
 def test_twenty_four_words(headless):
     out = _run(headless, r'''
-flow, result = run_flow([True, 24, True])
+flow, result = run_flow([True, 24, 'skip', True])
 return_value.write(repr((result, calls['shown'], expected_words(24), calls['saved'])).encode())
 ''')
     result, shown, expected, saved = out
@@ -133,7 +153,7 @@ return_value.write(repr((result, calls['shown'], expected_words(24), calls['save
 def test_words_stay_until_checkmark(headless):
     """The words page has no Back; dismissing it without the checkmark shows the same words again."""
     out = _run(headless, r'''
-flow, result = run_flow([True, 12, False, False, True])
+flow, result = run_flow([True, 12, 'skip', False, False, True])
 return_value.write(repr((result, calls['shown'])).encode())
 ''')
     result, shown = out
@@ -156,7 +176,7 @@ return_value.write(repr((result, calls['shown'], common.noise.sources, script)).
 
 def test_hardware_entropy_failure_shows_error_and_no_words(headless):
     out = _run(headless, r'''
-flow, result = run_flow([True, 12], noise_ok=False)
+flow, result = run_flow([True, 12, 'skip'], noise_ok=False)
 return_value.write(repr((result, calls['shown'], calls['messages'], calls['saved'])).encode())
 ''')
     result, shown, messages, saved = out
@@ -165,3 +185,75 @@ return_value.write(repr((result, calls['shown'], calls['messages'], calls['saved
     assert saved == 0
     assert len(messages) == 1
     assert 'Unable to gather hardware entropy' in messages[0]
+
+
+def test_dice_rolls_are_mixed_in_like_new_seed(headless):
+    """seed = SHA256(hw_entropy || rolls), the same derivation New Seed uses."""
+    out = _run(headless, r'''
+flow, result = run_flow([True, 12, 'dice', '6152433', True, True])
+return_value.write(repr({
+    'result': result,
+    'shown': calls['shown'],
+    'with_dice': expected_words(12, '6152433'),
+    'hw_only': expected_words(12),
+    'sources': common.noise.sources,
+    'saved': calls['saved'],
+    'settings_writes': calls['settings_writes'],
+    'rolls_dropped': flow.dice_rolls is None,
+    'confirm_shown': len(calls.get('dice_confirm', [])),
+}).encode())
+''')
+    assert out['result'] is True
+    assert out['shown'] == [out['with_dice']]
+    assert out['with_dice'] != out['hw_only']
+    assert out['sources'] == [7]           # hardware entropy is still always read
+    assert out['saved'] == 0
+    assert out['settings_writes'] == 0
+    assert out['rolls_dropped']
+    assert out['confirm_shown'] == 1
+
+
+def test_back_from_dice_entry_keeps_rolls(headless):
+    """Back from dice entry returns to the dice question; coming forward again restores the rolls."""
+    out = _run(headless, r'''
+flow, result = run_flow([True, 12, 'dice', 'back', 'dice', '1234', True, True])
+return_value.write(repr((result, calls['dice_prefill'], calls['shown'], expected_words(12, '1234'))).encode())
+''')
+    result, prefill, shown, expected = out
+    assert result is True
+    assert prefill == ['', '']     # typed rolls are only kept by the real page; the stub types none
+    assert shown == [expected]
+
+
+def test_back_from_dice_confirmation_returns_to_entry(headless):
+    out = _run(headless, r'''
+flow, result = run_flow([True, 24, 'dice', '55', False, '5566', True, True])
+return_value.write(repr((result, calls['dice_prefill'], calls['shown'], expected_words(24, '5566'))).encode())
+''')
+    result, prefill, shown, expected = out
+    assert result is True
+    assert prefill == ['', '55']   # confirmation Back pops to entry with the rolls preserved
+    assert shown == [expected]
+
+
+def test_skip_after_typing_rolls_uses_hardware_only(headless):
+    """Rolls typed and then abandoned with Back must not leak into a later Skip."""
+    out = _run(headless, r'''
+flow, result = run_flow([True, 12, 'dice', '33', False, 'back', 'skip', True])
+return_value.write(repr((result, calls['shown'], expected_words(12), calls['dice_prefill'])).encode())
+''')
+    result, shown, hw_only, prefill = out
+    assert result is True
+    assert shown == [hw_only]
+    assert prefill == ['', '33']
+
+
+def test_back_from_dice_question_returns_to_length(headless):
+    out = _run(headless, r'''
+flow, result = run_flow([True, 12, None, 24, 'skip', True])
+return_value.write(repr((result, calls['shown'], expected_words(24), common.noise.sources)).encode())
+''')
+    result, shown, expected, sources = out
+    assert result is True
+    assert shown == [expected]
+    assert sources == [7]

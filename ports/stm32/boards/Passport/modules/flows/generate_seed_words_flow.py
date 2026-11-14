@@ -4,12 +4,13 @@
 # generate_seed_words_flow.py - Generate a seed phrase and display it without storing it.
 #
 # Uses the same entropy as New Seed: new_seed_task reads all three hardware sources
-# (avalanche noise, MCU RNG and secure element) and hashes them with SHA-256. The
-# result is converted to BIP-39 words and shown once. Nothing is written to the
-# secure element, settings or microSD, and the flow has no settings_key, so its
-# state is never saved either.
+# (avalanche noise, MCU RNG and secure element) and hashes them with SHA-256, with
+# optional dice rolls appended: seed = SHA256(hw_entropy || rolls). The result is
+# converted to BIP-39 words and shown once. Nothing is written to the secure element,
+# settings or microSD, and the flow has no settings_key, so its state is never saved.
 
 from flows import Flow
+from flows.new_seed_flow import NewSeedFlow
 from pages import ErrorPage, SuccessPage, YesNoChooserPage
 from tasks import new_seed_task
 from utils import spinner_task, get_words_from_seed
@@ -18,9 +19,17 @@ import microns
 
 
 class GenerateSeedWordsFlow(Flow):
+    # Dice entry and confirmation are New Seed's own states, so both flows behave
+    # identically. They rely on self.seed_length and self.dice_rolls, and on this flow
+    # having a generate_seed state to continue to.
+    enter_dice = NewSeedFlow.enter_dice
+    confirm_dice = NewSeedFlow.confirm_dice
+    target_rolls = NewSeedFlow.target_rolls
+
     def __init__(self):
         super().__init__(initial_state=self.show_intro, name='GenerateSeedWordsFlow')
         self.seed_length = None
+        self.dice_rolls = None
         self.words = None
         self.error = None
 
@@ -45,15 +54,35 @@ class GenerateSeedWordsFlow(Flow):
         if not self.seed_length:
             self.back()
         else:
-            self.goto(self.generate_words)
+            self.goto(self.ask_dice)
 
-    async def generate_words(self):
-        (seed, error) = await spinner_task('Generating Seed', new_seed_task, args=[self.seed_length])
+    async def ask_dice(self):
+        from pages import ChooserPage
+
+        text = 'Add your own dice rolls? Hardware entropy is always used; dice are optional.'
+        options = [{'label': 'Add Dice Rolls', 'value': 'dice'},
+                   {'label': 'Skip', 'value': 'skip'}]
+        choice = await ChooserPage(text=text,
+                                   icon=lv.LARGE_ICON_INFO,
+                                   options=options,
+                                   left_micron=microns.Back).show()
+        if choice is None:
+            self.back()
+        elif choice == 'dice':
+            self.goto(self.enter_dice)
+        else:
+            # Skipping means hardware entropy only, even if rolls were typed earlier.
+            self.dice_rolls = None
+            self.goto(self.generate_seed)
+
+    async def generate_seed(self):
+        (seed, error) = await spinner_task('Generating Seed', new_seed_task, args=[self.seed_length, self.dice_rolls])
         if error is None:
             (self.words, error) = get_words_from_seed(seed)
-        # Drop the entropy as soon as the words exist. (This does not scrub memory;
-        # MicroPython offers no reliable way to zero these buffers.)
+        # Drop the entropy and rolls as soon as the words exist. (This does not scrub
+        # memory; MicroPython offers no reliable way to zero these buffers.)
         seed = None
+        self.dice_rolls = None
 
         if error is not None:
             self.error = error
