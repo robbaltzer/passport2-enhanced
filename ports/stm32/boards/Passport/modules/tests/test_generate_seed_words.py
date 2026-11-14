@@ -23,6 +23,7 @@ class FakeNoise:
         self.sources = []
     def random_bytes(self, buf, src):
         self.sources.append(src)
+        calls.setdefault('order', []).append('entropy')
         for i in range(len(buf)):
             buf[i] = HW[i]
         return self.ok
@@ -316,29 +317,54 @@ return_value.write(repr((result, calls['shown'], expected_words(24), common.nois
     assert sources == [7]
 
 
-def test_seed_warning_shown_once_before_the_words(headless):
+def test_seed_warning_shown_before_generating(headless):
+    """Stock skippable warning, run before any entropy is read; words follow right after."""
     out = _run(headless, r'''
 flow, result = run_flow([True, 24, 'skip', False, True])
 return_value.write(repr((result, calls.get('warning'), calls.get('order'))).encode())
 ''')
     result, warning, order = out
     assert result is True
-    assert warning == [{'action_text': 'display a new seed phrase', 'allow_skip': False}]
-    # warning first, then the words page (re-shown once after Back), never warned twice
-    assert order == ['warning', 'words', 'words']
+    assert warning == [{'action_text': 'display a new seed phrase'}]   # skippable (default) form
+    # warning, then entropy, then the words page (re-shown once after the Back key)
+    assert order == ['warning', 'entropy', 'words', 'words']
 
 
-def test_seed_warning_repeats_until_acknowledged(headless):
-    """The warning can't be used to discard a freshly generated phrase."""
+def test_back_on_warning_returns_without_generating(headless):
+    """Back on the warning returns to the dice question; nothing has been generated."""
     out = _run(headless, r'''
-warning_answers[:] = [False, None, True]
-flow, result = run_flow([True, 12, 'skip', True])
-return_value.write(repr((result, calls.get('order'), len(calls['shown']))).encode())
+warning_answers[:] = [False, True]
+flow, result = run_flow([True, 12, 'skip', 'skip', True])
+out = (result, calls.get('order'), common.noise.sources, calls['shown'], expected_words(12))
+return_value.write(repr(out).encode())
 ''')
-    result, order, shown = out
+    result, order, sources, shown, expected = out
     assert result is True
-    assert order == ['warning', 'warning', 'warning', 'words']
-    assert shown == 1
+    assert order == ['warning', 'warning', 'entropy', 'words']
+    assert sources == [7]          # entropy read once, only after the warning was accepted
+    assert shown == [expected]
+
+
+def test_back_on_warning_keeps_dice_rolls(headless):
+    """Back on the warning returns to the dice confirmation with the rolls kept."""
+    out = _run(headless, r'''
+warning_answers[:] = [False]
+flow, result = run_flow([True, 12, 'dice', '6152', True, True, True])
+return_value.write(repr((result, len(calls['dice_confirm']), calls['shown'], expected_words(12, '6152'))).encode())
+''')
+    result, confirms, shown, expected = out
+    assert result is True
+    assert confirms == 2           # confirmation shown again after Back on the warning
+    assert shown == [expected]     # the same rolls were used
+
+
+def test_simulator_noise_reports_success(headless):
+    """The real simulator Noise (not FakeNoise) must report success, as the device does."""
+    out = _run(headless, r'''
+import passport
+return_value.write(repr(passport.Noise().random_bytes(bytearray(4), passport.Noise.ALL)).encode())
+''')
+    assert out is True
 
 
 def test_rolls_cleared_when_leaving_without_generating(headless):
