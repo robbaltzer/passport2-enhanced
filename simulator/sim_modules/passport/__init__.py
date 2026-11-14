@@ -29,6 +29,12 @@ class Noise:
     def random_bytes(self, buf, _source):
         for i in range(len(buf)):
             buf[i] = randint(0, 255)
+        # Like the device's noise.random_bytes, report success. new_seed_task treats a
+        # falsy return as a hardware failure, so without this New Seed and Generate
+        # Seed Words always fail in the simulator.
+        # NOTE: these bytes come from a PRNG seeded with the clock and are guessable.
+        # Never put funds on a seed phrase generated in the simulator.
+        return True
 
 
 class Powermon:

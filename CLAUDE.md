@@ -64,7 +64,10 @@ the only test device. Mac: `~/Documents/passport2-enhanced`, Apple Silicon.
   state for `confirm_dice` to continue to. It must never store anything: no
   `save_seed_task`, no persistent settings writes, no `settings_key` on the flow.
   The words page sets `extend_timeout` (5-minute auto-shutdown floor, RAM only) so
-  the phrase isn't lost mid-transcription. `tests/test_generate_seed_words.py`
+  the phrase isn't lost mid-transcription. The stock `SeedWarningFlow` (skippable
+  form) runs at the start of `generate_seed`, before any entropy is read: Back
+  returns to the previous step with rolls kept, and nothing is lost because the
+  phrase doesn't exist yet. `tests/test_generate_seed_words.py`
   checks all of this. Not to be confused with upstream's **Temporary Seed**, which
   loads a seed.
 

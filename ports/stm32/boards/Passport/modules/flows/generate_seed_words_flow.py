@@ -45,7 +45,15 @@ class GenerateSeedWordsFlow(Flow):
         if result:
             self.goto(self.pick_length)
         else:
-            self.set_result(False)
+            self.finish(False)
+
+    def finish(self, result):
+        # Every exit goes through here, so rolls typed and then abandoned (Back all the
+        # way out) don't outlive the flow's use of them. Releases names only; see
+        # generate_seed for why buffers aren't scrubbed.
+        self.dice_rolls = None
+        self.words = None
+        self.set_result(result)
 
     async def pick_length(self):
         from public_constants import SEED_LENGTHS
@@ -78,6 +86,17 @@ class GenerateSeedWordsFlow(Flow):
             self.goto(self.generate_seed)
 
     async def generate_seed(self):
+        from flows import SeedWarningFlow
+
+        # The stock warning shown before seed words, in its skippable form, run before the
+        # phrase exists: Back (or Cancel) returns to the previous step (dice confirmation
+        # or the dice question) with any typed rolls kept, and nothing is lost because
+        # nothing has been generated yet. The words follow right after the spinner.
+        warned = await SeedWarningFlow(action_text='display a new seed phrase').run()
+        if not warned:
+            self.back()
+            return
+
         (seed, error) = await spinner_task('Generating Seed', new_seed_task, args=[self.seed_length, self.dice_rolls])
         if error is None:
             (self.words, error) = get_words_from_seed(seed)
@@ -96,15 +115,18 @@ class GenerateSeedWordsFlow(Flow):
     async def show_words(self):
         from pages import SeedWordsListPage
 
-        # No Back here: going back would mean generating a different phrase, so the
-        # only way out is the checkmark once the words have been written down. Back on
-        # the first page just shows the same words again (as in ViewSeedWordsFlow).
+        # The words page has no Back icon: going back would mean generating a different
+        # phrase, so the only way out is the checkmark once the words are written down.
+        # Pressing the Back key on the first page just shows the same words again (as in
+        # ViewSeedWordsFlow).
         result = False
         while not result:
             page = SeedWordsListPage(words=self.words)
             # Nothing is stored, so an auto-shutdown here would lose the phrase. Raise
             # the timeout floor to 5 minutes while the words are shown (RAM-only change,
-            # restored when the page closes), as the dice and QR pages do.
+            # restored when the page closes), as the dice and QR pages do. Set as an
+            # attribute because SeedWordsListPage (upstream) doesn't take the argument;
+            # Page.attach/detach read it, so each re-shown page applies and restores it.
             page.extend_timeout = True
             result = await page.show()
 
@@ -113,8 +135,8 @@ class GenerateSeedWordsFlow(Flow):
 
     async def show_done(self):
         await SuccessPage(text='Seed words cleared from the screen. Nothing was saved.').show()
-        self.set_result(True)
+        self.finish(True)
 
     async def show_error(self):
         await ErrorPage(text='Unable to generate seed: {}'.format(self.error)).show()
-        self.set_result(False)
+        self.finish(False)
