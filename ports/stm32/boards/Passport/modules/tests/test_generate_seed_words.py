@@ -27,23 +27,33 @@ class FakeNoise:
             buf[i] = HW[i]
         return self.ok
 
-calls = {'saved': 0, 'settings_writes': 0, 'shown': [], 'messages': []}
+calls = {'saved': 0, 'settings_writes': 0, 'volatile': 0, 'shown': [], 'messages': [], 'extend_timeout': []}
 
 # Anything that could persist a seed or a setting is counted; the flow must touch none.
-import tasks
+# The headless harness has no common.settings, so install one that counts persistent
+# writes. Volatile (RAM-only) changes, e.g. the shutdown-timeout floor, are counted
+# separately and are allowed.
+class FakeSettings:
+    def get(self, key, default=None): return default
+    def set(self, *args, **kwargs): calls['settings_writes'] += 1
+    def save(self, *args, **kwargs): calls['settings_writes'] += 1
+    def remove(self, *args, **kwargs): calls['settings_writes'] += 1
+    def set_volatile(self, *args, **kwargs): calls['volatile'] += 1
+    def clear_volatile(self, *args, **kwargs): calls['volatile'] += 1
+common.settings = FakeSettings()
+
 async def counting_save_seed_task(*args, **kwargs):
     calls['saved'] += 1
+import tasks
 tasks.save_seed_task = counting_save_seed_task
-def counted_settings_write(*args, **kwargs):
-    calls['settings_writes'] += 1
-if getattr(common, 'settings', None) is not None:
-    for name in ('set', 'save', 'set_volatile'):
-        if hasattr(common.settings, name):
-            setattr(common.settings, name, counted_settings_write)
 
 import pages
 import flows.generate_seed_words_flow as gswf
 from flows.generate_seed_words_flow import GenerateSeedWordsFlow
+# Also patch the name on the flow's own module, in case it is ever imported there, and
+# record whether the module references it at all.
+save_task_referenced = hasattr(gswf, 'save_seed_task')
+gswf.save_seed_task = counting_save_seed_task
 
 async def fake_spinner(text, task, args=(), **kwargs):
     out = []
@@ -55,36 +65,52 @@ gswf.spinner_task = fake_spinner
 
 # Each page pops its answer from `script`: True/False for Continue/Back on the
 # intro; a word count or None for the length chooser; 'dice', 'skip' or None for the
-# dice question; a roll string or 'back' for dice entry; True/False for the dice
-# confirmation; True/False for the words page.
+# dice question; a roll string, 'back', or 'back:ROLLS' (type ROLLS, then Back) for
+# dice entry; True/False for the dice confirmation; True/False for the words page.
+# Every stub yields to the event loop first, as real pages do.
 script = []
 class FakeYesNo:
     def __init__(self, **kwargs): pass
-    async def show(self): return script.pop(0)
+    async def show(self):
+        await uasyncio.sleep_ms(0)
+        return script.pop(0)
 class FakeChooser:
     def __init__(self, **kwargs): pass
-    async def show(self): return script.pop(0)
-class FakeWords:
-    def __init__(self, words=None, **kwargs): self.words = words
     async def show(self):
+        await uasyncio.sleep_ms(0)
+        return script.pop(0)
+class FakeWords:
+    def __init__(self, words=None, **kwargs):
+        self.words = words
+        self.extend_timeout = False
+    async def show(self):
+        await uasyncio.sleep_ms(0)
         calls['shown'].append(list(self.words))
+        calls['extend_timeout'].append(self.extend_timeout)
         return script.pop(0)
 class FakeMessage:
     def __init__(self, text=None, **kwargs): calls['messages'].append(text)
-    async def show(self): return True
+    async def show(self):
+        await uasyncio.sleep_ms(0)
+        return True
 class FakeDice:
     def __init__(self, rolls='', **kwargs):
         self.rolls = rolls
         calls.setdefault('dice_prefill', []).append(rolls)
     async def show(self):
+        await uasyncio.sleep_ms(0)
         action = script.pop(0)
-        if action == 'back':
+        if action.startswith('back'):
+            # Like the real page: Back returns None, and page.rolls holds what was typed.
+            self.rolls = self.rolls + action[5:]
             return None
         self.rolls = action
         return action
 class FakeDiceConfirm:
     def __init__(self, text=None, **kwargs): calls.setdefault('dice_confirm', []).append(text)
-    async def show(self): return script.pop(0)
+    async def show(self):
+        await uasyncio.sleep_ms(0)
+        return script.pop(0)
 gswf.YesNoChooserPage = FakeYesNo
 gswf.SuccessPage = FakeMessage
 gswf.ErrorPage = FakeMessage
@@ -123,6 +149,8 @@ return_value.write(repr({
     'sources': common.noise.sources,
     'saved': calls['saved'],
     'settings_writes': calls['settings_writes'],
+    'save_task_referenced': save_task_referenced,
+    'extend_timeout': calls['extend_timeout'],
     'words_dropped': flow.words is None,
     'left_over': script,
 }).encode())
@@ -133,9 +161,21 @@ return_value.write(repr({
     assert len(out['shown'][0]) == 12
     assert out['sources'] == [7]           # one read, from noise.ALL (all three sources)
     assert out['saved'] == 0
-    assert out['settings_writes'] == 0
+    assert out['settings_writes'] == 0     # no persistent setting written
+    assert not out['save_task_referenced']  # the flow module never imports save_seed_task
+    assert out['extend_timeout'] == [True]  # words page raises the auto-shutdown floor
     assert out['words_dropped']
     assert out['left_over'] == []
+
+
+def test_settings_counter_can_fail(headless):
+    """Guard for the guard: the settings stub really counts persistent writes."""
+    out = _run(headless, r'''
+common.settings.set('probe', 1)
+common.settings.set_volatile('shutdown_timeout', 300)
+return_value.write(repr((calls['settings_writes'], calls['volatile'])).encode())
+''')
+    assert out == (1, 1)
 
 
 def test_twenty_four_words(headless):
@@ -216,12 +256,12 @@ return_value.write(repr({
 def test_back_from_dice_entry_keeps_rolls(headless):
     """Back from dice entry returns to the dice question; coming forward again restores the rolls."""
     out = _run(headless, r'''
-flow, result = run_flow([True, 12, 'dice', 'back', 'dice', '1234', True, True])
+flow, result = run_flow([True, 12, 'dice', 'back:12', 'dice', '1234', True, True])
 return_value.write(repr((result, calls['dice_prefill'], calls['shown'], expected_words(12, '1234'))).encode())
 ''')
     result, prefill, shown, expected = out
     assert result is True
-    assert prefill == ['', '']     # typed rolls are only kept by the real page; the stub types none
+    assert prefill == ['', '12']   # rolls typed before Back are restored on the way forward
     assert shown == [expected]
 
 

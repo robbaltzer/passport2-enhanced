@@ -81,8 +81,9 @@ class GenerateSeedWordsFlow(Flow):
         (seed, error) = await spinner_task('Generating Seed', new_seed_task, args=[self.seed_length, self.dice_rolls])
         if error is None:
             (self.words, error) = get_words_from_seed(seed)
-        # Drop the entropy and rolls as soon as the words exist. (This does not scrub
-        # memory; MicroPython offers no reliable way to zero these buffers.)
+        # Drop our references to the entropy and rolls once the words exist. This only
+        # releases the names; it does not scrub the buffers, since MicroPython offers no
+        # reliable way to zero them.
         seed = None
         self.dice_rolls = None
 
@@ -96,10 +97,16 @@ class GenerateSeedWordsFlow(Flow):
         from pages import SeedWordsListPage
 
         # No Back here: going back would mean generating a different phrase, so the
-        # only way out is the checkmark once the words have been written down.
+        # only way out is the checkmark once the words have been written down. Back on
+        # the first page just shows the same words again (as in ViewSeedWordsFlow).
         result = False
         while not result:
-            result = await SeedWordsListPage(words=self.words).show()
+            page = SeedWordsListPage(words=self.words)
+            # Nothing is stored, so an auto-shutdown here would lose the phrase. Raise
+            # the timeout floor to 5 minutes while the words are shown (RAM-only change,
+            # restored when the page closes), as the dice and QR pages do.
+            page.extend_timeout = True
+            result = await page.show()
 
         self.words = None
         self.goto(self.show_done)

@@ -61,9 +61,12 @@ the only test device. Mac: `~/Documents/passport2-enhanced`, Apple Silicon.
   once. Dice are **optional** here ("Add Dice Rolls" / "Skip"); the dice states are
   New Seed's own (`enter_dice`, `confirm_dice`, `target_rolls` assigned into the
   flow), so changes to them affect both flows, and the flow needs a `generate_seed`
-  state for `confirm_dice` to continue to. It must never store anything: no `save_seed_task`, no settings
-  writes, no `settings_key` on the flow. `tests/test_generate_seed_words.py` checks
-  this. Not to be confused with upstream's **Temporary Seed**, which loads a seed.
+  state for `confirm_dice` to continue to. It must never store anything: no
+  `save_seed_task`, no persistent settings writes, no `settings_key` on the flow.
+  The words page sets `extend_timeout` (5-minute auto-shutdown floor, RAM only) so
+  the phrase isn't lost mid-transcription. `tests/test_generate_seed_words.py`
+  checks all of this. Not to be confused with upstream's **Temporary Seed**, which
+  loads a seed.
 
 ## The rule that bricked the device once
 
