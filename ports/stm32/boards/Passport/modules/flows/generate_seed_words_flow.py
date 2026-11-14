@@ -34,7 +34,9 @@ class GenerateSeedWordsFlow(Flow):
         self.error = None
 
     async def show_intro(self):
-        text = 'Create a new seed phrase that is displayed once. It is not saved on this Passport.'
+        # Keep this short (stock New Seed uses 59 chars): longer text pushes the Back
+        # option off the bottom of the screen.
+        text = 'Show a new seed phrase once. Nothing is saved.'
         result = await YesNoChooserPage(text=text,
                                         yes_text='Continue',
                                         no_text='Back',
@@ -59,7 +61,7 @@ class GenerateSeedWordsFlow(Flow):
     async def ask_dice(self):
         from pages import ChooserPage
 
-        text = 'Add your own dice rolls? Hardware entropy is always used; dice are optional.'
+        text = 'Add dice rolls? Hardware entropy is always used.'
         options = [{'label': 'Add Dice Rolls', 'value': 'dice'},
                    {'label': 'Skip', 'value': 'skip'}]
         choice = await ChooserPage(text=text,
